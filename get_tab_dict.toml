@@ -1,0 +1,91 @@
+[database_info]
+conn_str      = "oracle://system:$te$s$t$1126$@192.168.21.160:1521/orcl"
+
+[table_list]
+tables=["SYSTEM.E_MP_DAY_READ","SYSTEM.E_MP_DAY_READ","SYSTEM.E_MP_DAY_READs","SYSTEM.T1","SYS.EXP_OBJ$"]
+
+[title_list]
+title_tablist=["序号", "管理部门", "系统名称","数据库用户名","数据库名" ,"数据表英文名", "数据表中文名称", "数据表注释信息(数据表业务描述信息)", "最后更新时间", "记录数","字段数量"]
+title_tabdict=["序号", "数据表英文名", "表中文名","字段英文名", "字段类型", "是否必填项", "字段注释信息(业务描述信息)", "分区字段", "主键字段"]
+
+[query_sql]
+sql_tabdict = """with cols as (select b.COLUMN_ID,
+                         b.owner,
+                         b.table_name,
+                         b.column_name,
+                         decode(b.DATA_TYPE,
+                                'DATE',
+                                'DATE',
+                                'VARCHAR2',
+                                b.DATA_TYPE || '(' || b.DATA_LENGTH || ')',
+                                'NUMBER',
+                                b.DATA_TYPE ||
+                                nvl2(b.DATA_PRECISION, '(' || b.DATA_PRECISION, '') ||
+                                nvl2(b.DATA_SCALE, ',' || b.DATA_SCALE || ')', ''),
+                                B.DATA_TYPE) DATA_TYPE,
+                         b.NULLABLE,
+                         a.COMMENTS
+                    from dba_col_comments a, dba_tab_cols b
+                   where a.OWNER(+) = b.OWNER
+                     and a.TABLE_NAME(+) = b.TABLE_NAME
+                     and a.COLUMN_NAME(+) = b.COLUMN_NAME
+                     and b.owner = :owner
+                     and b.TABLE_NAME = :table_name
+                     ),
+                part_cols as
+                 (select m.owner, m.table_name, n.COLUMN_NAME part_column, s.comments
+                    from dba_tables m, dba_part_key_columns n, dba_tab_comments s
+                   where m.owner = n.owner(+)
+                     and m.table_name = n.name(+)
+                     and m.owner  = s.owner (+)
+                     and m.table_name = s.table_name (+)
+                     and m.owner = :owner
+                     and m.table_name = :table_name),
+                key_cols as
+                 (select s.OWNER, s.TABLE_NAME, listagg(s.column_name, ',') key_cols
+                    from dba_cons_columns s, dba_constraints p
+                   where s.table_name = :table_name
+                     and s.OWNER = :owner
+                     and p.CONSTRAINT_TYPE = 'P'
+                     and s.owner = p.OWNER
+                     and s.CONSTRAINT_NAME = p.CONSTRAINT_NAME
+                   group by s.OWNER, s.TABLE_NAME)
+                select cc.COLUMN_ID,
+                       cc.table_name,
+                       nvl(pc.comments, ' ') tconments,
+                       cc.column_name,
+                       cc.DATA_TYPE,
+                       cc.NULLABLE,
+                       nvl(cc.COMMENTS, ' '),
+                       nvl(pc.part_column, '非分区表'),
+                       nvl(kc.key_cols, '无主键')
+                  from cols cc, part_cols pc, key_cols kc
+                 where cc.owner = pc.owner(+)
+                   and cc.owner = kc.owner(+)
+                   and cc.TABLE_NAME = pc.table_name(+)
+                   and cc.TABLE_NAME = kc.table_name(+)
+                 order by cc.COLUMN_ID asc"""
+
+sql_tablist = """select '用采2.0' as "系统名称",
+       t.OWNER as "数据库用户名",
+       'Oracle' as "数据库名",
+       t.table_name as "数据表英文名",
+       nvl(v.COMMENTS, ' ') as "数据表中文名称",
+       nvl(v.COMMENTS, ' ') as "数据表注释信息（数据表业务描述信息）",
+       nvl(to_char(max(m.timestamp),'YYYY-MM-DD HH24:MI:SS'),' ') as "最后更新时间",
+       nvl(t.NUM_ROWS, 0) as "记录数",
+       count(distinct k.COLUMN_NAME) as "字段数量"
+from  dba_tables t, dba_tab_comments v, dba_tab_modifications m,dba_tab_columns k
+where t.TABLE_NAME = v.TABLE_NAME(+)
+  and t.OWNER = v.OWNER(+)
+  and t.owner = m.table_OWNER(+)
+  and t.TABLE_NAME = m.TABLE_name(+)
+  and t.owner=K.owner (+)
+  and t.table_name=k.TABLE_NAME(+)
+  and t.owner = :owner
+  and t.table_name  = :tablename
+group by
+         t.table_name,
+         t.OWNER,
+         v.COMMENTS,
+         t.NUM_ROWS"""

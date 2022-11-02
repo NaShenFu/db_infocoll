@@ -1,0 +1,8 @@
+[database_info]
+conn_str      = "oracle://system:$test$1126@192.168.21.160:1521/orcl"
+
+[selection_info]
+begin_snapid = 189
+end_snapid   = 190
+group        = "cpu_time"
+topN         = 20
